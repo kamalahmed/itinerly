@@ -40,6 +40,7 @@ See [`.env.example`](./.env.example). Summary:
 | `AMADEUS_CLIENT_ID` / `AMADEUS_CLIENT_SECRET` | Amadeus Self-Service OAuth credentials. |
 | `AMADEUS_HOSTNAME` | `test.api.amadeus.com` (default) or `api.amadeus.com`. |
 | `DUFFEL_API_KEY` | Duffel API token. |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis for per-IP search rate limiting. Leave blank to disable (dev/CI). |
 | `NEXT_PUBLIC_BASE_URL` | Used for metadata / canonical URLs. |
 
 ## Flight data providers
@@ -98,8 +99,16 @@ prisma/
 | `pnpm build` | Production build |
 | `pnpm start` | Serve the production build |
 | `pnpm test` | Run the Vitest suite |
+| `pnpm test:coverage` | Run tests with a coverage report |
 | `pnpm seed` | Re-run the database seed |
 | `pnpm db:reset` | Drop, re-migrate and re-seed the database |
+
+## Rate limiting
+
+`middleware.ts` rate-limits the public search APIs (`/api/flights/search`,
+`/api/airports`) per IP — 30 requests / 10 seconds — backed by Upstash Redis so
+it holds up across Vercel's serverless instances. When the Upstash env vars are
+unset it no-ops, so local dev and CI run without the service.
 
 ## Notes
 
