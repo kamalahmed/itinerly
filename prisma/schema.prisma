@@ -1,0 +1,68 @@
+// itinerly — Prisma schema
+// SQLite for dev; switch datasource provider to "postgresql" for prod.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Country {
+  id       Int       @id @default(autoincrement())
+  name     String
+  iata2    String    @unique
+  airports Airport[]
+}
+
+model Airport {
+  id        Int     @id @default(autoincrement())
+  iata      String  @unique
+  name      String
+  city      String
+  timeZone  String
+  countryId Int
+  country   Country @relation(fields: [countryId], references: [id])
+}
+
+model Airline {
+  id   Int     @id @default(autoincrement())
+  iata String  @unique
+  name String
+  logo String?
+}
+
+// Used by the "mock" provider to mirror echoflights' seeded-DB approach.
+model SeededRoute {
+  id                 Int     @id @default(autoincrement())
+  originIata         String
+  destinationIata    String
+  airlineIata        String
+  flightNumber       String
+  departureTimeLocal String // "08:10"
+  durationMinutes    Int
+  aircraft           String?
+  basePriceUSD       Float
+
+  @@index([originIata, destinationIata])
+}
+
+// Caches successful provider searches; keyed by hash(origin+dest+date+cabin+pax).
+model SearchCache {
+  id         Int      @id @default(autoincrement())
+  key        String   @unique
+  offersJson String
+  createdAt  DateTime @default(now())
+}
+
+model Booking {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  pnr           String   @unique
+  passengerJson String // JSON: array of { title, fullName, dob, nationality, passportNumber, passportExpiry }
+  offerJson     String // snapshot of the FlightOffer at booking time
+  status        String // "pending" | "paid_fake" | "issued"
+  pdfPath       String?
+}
