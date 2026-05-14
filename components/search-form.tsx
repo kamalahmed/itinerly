@@ -287,6 +287,7 @@ function PaxRow({
           variant="outline"
           size="icon"
           className="h-8 w-8"
+          aria-label={`Decrease ${label}`}
           disabled={value <= min}
           onClick={() => onChange(Math.max(min, value - 1))}
         >
@@ -298,6 +299,7 @@ function PaxRow({
           variant="outline"
           size="icon"
           className="h-8 w-8"
+          aria-label={`Increase ${label}`}
           disabled={value >= max}
           onClick={() => onChange(Math.min(max, value + 1))}
         >

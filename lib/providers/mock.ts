@@ -172,15 +172,15 @@ export const mock: FlightProvider = {
       }
     }
 
-    if (q.preferredAirline) {
-      const pref = q.preferredAirline.toUpperCase();
-      offers.sort((a, b) => {
+    // Sort by price, but float the preferred airline (if any) to the top.
+    const pref = q.preferredAirline?.toUpperCase();
+    return offers.sort((a, b) => {
+      if (pref) {
         const am = a.outboundSegments[0].carrier.iata === pref ? 0 : 1;
         const bm = b.outboundSegments[0].carrier.iata === pref ? 0 : 1;
-        return am - bm;
-      });
-    }
-
-    return offers.sort((a, b) => a.totalPriceUSD - b.totalPriceUSD);
+        if (am !== bm) return am - bm;
+      }
+      return a.totalPriceUSD - b.totalPriceUSD;
+    });
   },
 };
