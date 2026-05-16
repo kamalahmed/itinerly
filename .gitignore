@@ -39,7 +39,7 @@ CLAUDE.md
 *.tsbuildinfo
 next-env.d.ts
 
-# prisma
+# prisma (legacy SQLite — kept for safety in case anyone re-introduces it)
 prisma/dev.db
 prisma/dev.db-journal
 

@@ -15,6 +15,23 @@ echoflights' visual style."
   across all 18 carriers; CGP/ZYL/BZL are seeded only to their real Middle East
   routes (DXB, DOH, AUH, MCT, JED, RUH, SHJ, KWI).
 
+## Database / deployment
+
+- **Postgres everywhere.** SQLite was used for the initial scaffold but does
+  not work on Vercel (ephemeral serverless filesystem). The schema is now
+  `provider = "postgresql"`. Local dev runs Postgres via the bundled
+  `docker-compose.yml` or `brew install postgresql@16`; CI uses a GitHub
+  Actions Postgres service; prod uses Vercel Postgres / Neon / Supabase. The
+  connection string is the only thing that changes.
+- **Migrations run on every Vercel build** via `prisma migrate deploy && next build`.
+  Idempotent — already-applied migrations are skipped. Seeding is **not** in
+  the build (would wipe data); it must be run once manually after the first
+  deploy.
+- **Rate limiting via Upstash Redis** (`@upstash/ratelimit`) on the public
+  search APIs. Picked over Vercel WAF (needs Pro plan, not in repo) and
+  in-memory limiters (unreliable across serverless instances). Gracefully
+  no-ops when Upstash env vars are absent.
+
 ## Stack / tooling
 
 - **Next.js pinned to 14.2.x.** `create-next-app@latest` installs Next 16; the

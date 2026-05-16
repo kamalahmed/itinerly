@@ -1,12 +1,14 @@
 // itinerly — Prisma schema
-// SQLite for dev; switch datasource provider to "postgresql" for prod.
+// Postgres everywhere. Local dev uses Postgres via docker compose or a brew
+// install; Vercel uses Vercel Postgres / Neon / Supabase — all just a
+// DATABASE_URL away.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

@@ -1,32 +1,37 @@
 -- CreateTable
 CREATE TABLE "Country" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
-    "iata2" TEXT NOT NULL
+    "iata2" TEXT NOT NULL,
+
+    CONSTRAINT "Country_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Airport" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL,
     "iata" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "city" TEXT NOT NULL,
     "timeZone" TEXT NOT NULL,
     "countryId" INTEGER NOT NULL,
-    CONSTRAINT "Airport_countryId_fkey" FOREIGN KEY ("countryId") REFERENCES "Country" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+
+    CONSTRAINT "Airport_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Airline" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL,
     "iata" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "logo" TEXT
+    "logo" TEXT,
+
+    CONSTRAINT "Airline_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "SeededRoute" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL,
     "originIata" TEXT NOT NULL,
     "destinationIata" TEXT NOT NULL,
     "airlineIata" TEXT NOT NULL,
@@ -34,26 +39,32 @@ CREATE TABLE "SeededRoute" (
     "departureTimeLocal" TEXT NOT NULL,
     "durationMinutes" INTEGER NOT NULL,
     "aircraft" TEXT,
-    "basePriceUSD" REAL NOT NULL
+    "basePriceUSD" DOUBLE PRECISION NOT NULL,
+
+    CONSTRAINT "SeededRoute_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "SearchCache" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL,
     "key" TEXT NOT NULL,
     "offersJson" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SearchCache_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "Booking" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "id" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "pnr" TEXT NOT NULL,
     "passengerJson" TEXT NOT NULL,
     "offerJson" TEXT NOT NULL,
     "status" TEXT NOT NULL,
-    "pdfPath" TEXT
+    "pdfPath" TEXT,
+
+    CONSTRAINT "Booking_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -73,3 +84,6 @@ CREATE UNIQUE INDEX "SearchCache_key_key" ON "SearchCache"("key");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Booking_pnr_key" ON "Booking"("pnr");
+
+-- AddForeignKey
+ALTER TABLE "Airport" ADD CONSTRAINT "Airport_countryId_fkey" FOREIGN KEY ("countryId") REFERENCES "Country"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -11,23 +11,28 @@ recorded in [`DECISIONS.md`](./DECISIONS.md).
 
 - **Next.js 14** (App Router) + **TypeScript**
 - **Tailwind CSS 3** + hand-vendored **shadcn/ui** components (Radix)
-- **Prisma** — SQLite for dev, Postgres for prod
+- **Prisma + Postgres** (local via docker or Homebrew; Vercel Postgres / Neon / Supabase in prod)
+- **Upstash Redis** rate limiting on the search APIs
 - **@react-pdf/renderer** + **bwip-js** for the itinerary PDF + barcode
-- **Vitest** for tests
+- **Vitest** for tests, **GitHub Actions** for CI
 
 ## Quick start
 
 ```bash
 corepack enable pnpm        # pnpm ships with Node 22 via corepack
 pnpm install
-cp .env.example .env        # defaults work out of the box (FLIGHT_PROVIDER=mock)
-pnpm prisma migrate dev     # creates prisma/dev.db
+cp .env.example .env        # defaults work for local dev
+
+# Start a local Postgres — either:
+docker compose up -d        # uses the bundled docker-compose.yml, OR
+brew install postgresql@16 && brew services start postgresql@16
+
+pnpm prisma migrate deploy  # applies the bundled migration
 pnpm prisma db seed         # seeds airports, airlines, ~200 routes
 pnpm dev                    # http://localhost:3000
 ```
 
-If you cloned a repo that already has migrations, run `pnpm prisma migrate dev`
-then `pnpm prisma db seed` (or `pnpm db:reset` to wipe + reseed).
+`pnpm db:reset` will wipe and re-seed if you need a clean state.
 
 ## Environment variables
 
@@ -35,7 +40,7 @@ See [`.env.example`](./.env.example). Summary:
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Prisma connection string. Dev: `file:./dev.db`. |
+| `DATABASE_URL` | Postgres connection string. |
 | `FLIGHT_PROVIDER` | `mock` (default), `amadeus`, or `duffel`. See below. |
 | `AMADEUS_CLIENT_ID` / `AMADEUS_CLIENT_SECRET` | Amadeus Self-Service OAuth credentials. |
 | `AMADEUS_HOSTNAME` | `test.api.amadeus.com` (default) or `api.amadeus.com`. |
@@ -109,6 +114,28 @@ prisma/
 `/api/airports`) per IP — 30 requests / 10 seconds — backed by Upstash Redis so
 it holds up across Vercel's serverless instances. When the Upstash env vars are
 unset it no-ops, so local dev and CI run without the service.
+
+## Deploying to Vercel
+
+1. Push this repo to GitHub and connect it in the Vercel dashboard — Next.js
+   is auto-detected, `pnpm` is auto-detected from `pnpm-lock.yaml`.
+2. Provision a Postgres database (Vercel Postgres / Neon / Supabase) and set
+   `DATABASE_URL` in Vercel's project env.
+3. Optional but recommended: create a free Upstash Redis database and set
+   `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` to activate the
+   per-IP search rate limiting.
+4. (Optional) Set `AMADEUS_CLIENT_ID` / `AMADEUS_CLIENT_SECRET` and
+   `DUFFEL_API_KEY` for live flight data.
+5. Deploy. The `build` script runs `prisma migrate deploy && next build`, so
+   schema migrations are applied automatically on every deploy.
+6. **Seed once** after the first deploy. The build doesn't seed (it would wipe
+   the table on every deploy). Run it from your machine against the prod URL:
+   ```bash
+   DATABASE_URL="postgres://…prod…" pnpm prisma db seed
+   ```
+
+`.github/workflows/ci.yml` runs lint, typecheck, tests and build against a
+fresh Postgres on every push and pull request.
 
 ## Notes
 
