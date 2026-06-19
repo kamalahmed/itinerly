@@ -28,7 +28,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://itinerly:itinerly@localhost:5432/itinerly_test?schema=public
       # Local Postgres has no connection pooler, so the direct URL is identical.
-      DIRECT_URL: postgresql://itinerly:itinerly@localhost:5432/itinerly_test?schema=public
+      # (In production this is provided by the Neon integration.)
+      DATABASE_URL_UNPOOLED: postgresql://itinerly:itinerly@localhost:5432/itinerly_test?schema=public
       NEXT_PUBLIC_BASE_URL: http://localhost:3000
 
     steps:

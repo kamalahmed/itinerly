@@ -14,7 +14,10 @@ datasource db {
   url       = env("DATABASE_URL")
   // Migrations / introspection — must use the DIRECT (non-pooled) endpoint,
   // since `prisma migrate` can't run over PgBouncer's transaction pooler.
-  directUrl = env("DIRECT_URL")
+  // We read Neon's integration-managed DATABASE_URL_UNPOOLED so the value is
+  // auto-rotated with the pooled URL and never needs manual maintenance.
+  // Locally / in CI (no pooler) set it equal to DATABASE_URL.
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model Country {
