@@ -191,16 +191,16 @@ export function FlightCard({ offer }: { offer: FlightOffer }) {
               total · {offer.provider}
             </div>
           </div>
-          <form
-            action={async () => {
+          <Button
+            type="button"
+            disabled={submitting}
+            onClick={async () => {
               setSubmitting(true);
               await createBookingDraft(offer);
             }}
           >
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Selecting…" : "Select"}
-            </Button>
-          </form>
+            {submitting ? "Selecting…" : "Select"}
+          </Button>
         </div>
       </div>
 

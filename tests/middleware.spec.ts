@@ -10,6 +10,7 @@ import { middleware } from "@/middleware";
 import { checkRateLimit } from "@/lib/ratelimit";
 
 const SEARCH = "http://localhost/api/flights/search?origin=DAC";
+const PDF = "http://localhost/api/booking/abc123/pdf";
 
 beforeEach(() => {
   vi.mocked(checkRateLimit).mockReset();
@@ -57,6 +58,21 @@ describe("rate-limit middleware", () => {
     await middleware(new NextRequest(SEARCH));
     expect(checkRateLimit).toHaveBeenCalledWith(
       "203.0.113.5:/api/flights/search"
+    );
+  });
+
+  it("rate-limits the booking PDF endpoint (PII protection)", async () => {
+    vi.mocked(checkRateLimit).mockResolvedValue({
+      success: false,
+      limit: 30,
+      remaining: 0,
+      reset: Date.now() + 8_000,
+    });
+
+    const res = await middleware(new NextRequest(PDF));
+    expect(res.status).toBe(429);
+    expect(checkRateLimit).toHaveBeenCalledWith(
+      "203.0.113.5:/api/booking/abc123/pdf"
     );
   });
 });

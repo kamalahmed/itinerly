@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
 
 /**
- * Rate-limits the public, unauthenticated search APIs to curb bot abuse.
+ * Rate-limits the public, unauthenticated search APIs and the itinerary PDF
+ * endpoint (which serves passenger PII) to curb bot abuse and scraping.
  * No-ops when Upstash is not configured (see lib/ratelimit.ts).
  */
 export const config = {
-  matcher: ["/api/flights/search", "/api/airports"],
+  matcher: ["/api/flights/search", "/api/airports", "/api/booking/:id/pdf"],
 };
 
 export async function middleware(req: NextRequest) {
