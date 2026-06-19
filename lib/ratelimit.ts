@@ -1,5 +1,6 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import { withTimeout } from "@/lib/with-timeout";
 
 /**
  * Per-IP rate limiting for the public search APIs, backed by Upstash Redis so
@@ -48,18 +49,28 @@ export interface RateLimitResult {
 export async function checkRateLimit(
   identifier: string
 ): Promise<RateLimitResult> {
-  const l = getLimiter();
-  if (!l) {
-    // Rate limiting disabled — allow everything.
+  try {
+    const l = getLimiter();
+    if (!l) {
+      // Rate limiting disabled — allow everything.
+      return { success: true, limit: 0, remaining: 0, reset: 0 };
+    }
+    // Bound the Upstash round-trip so a slow/unreachable limiter can't stall
+    // (or crash) the middleware that runs on every matched request.
+    const r = await withTimeout(l.limit(identifier), 2000, "ratelimit");
+    return {
+      success: r.success,
+      limit: r.limit,
+      remaining: r.remaining,
+      reset: r.reset,
+    };
+  } catch (err) {
+    // Fail OPEN: a rate-limiter outage (Upstash down, bad config, slow network)
+    // must never take down the site. Allow the request rather than letting the
+    // error bubble out of the middleware (which 500s as MIDDLEWARE_INVOCATION_FAILED).
+    console.error("[ratelimit] limiter unavailable, allowing request:", err);
     return { success: true, limit: 0, remaining: 0, reset: 0 };
   }
-  const r = await l.limit(identifier);
-  return {
-    success: r.success,
-    limit: r.limit,
-    remaining: r.remaining,
-    reset: r.reset,
-  };
 }
 
 /** Best-effort client IP from proxy headers, with a localhost fallback. */

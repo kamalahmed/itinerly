@@ -76,4 +76,42 @@ describe("rate limiting when Upstash is configured", () => {
     expect(r.limit).toBe(30);
     expect(r.reset).toBe(1_700_000_000);
   });
+
+  it("fails OPEN when the limiter throws (Upstash outage must not 500 the site)", async () => {
+    vi.doMock("@upstash/ratelimit", () => ({
+      Ratelimit: class {
+        static slidingWindow() {
+          return {};
+        }
+        limit = vi.fn().mockRejectedValue(new Error("upstash unreachable"));
+      },
+    }));
+    vi.doMock("@upstash/redis", () => ({ Redis: class {} }));
+    process.env.UPSTASH_REDIS_REST_URL = "https://example.upstash.io";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "token";
+    vi.resetModules();
+
+    const mod = await import("@/lib/ratelimit");
+    const r = await mod.checkRateLimit("203.0.113.5");
+    expect(r.success).toBe(true); // allowed despite the limiter error
+  });
+
+  it("fails OPEN when the limiter hangs past the timeout", async () => {
+    vi.doMock("@upstash/ratelimit", () => ({
+      Ratelimit: class {
+        static slidingWindow() {
+          return {};
+        }
+        limit = vi.fn().mockImplementation(() => new Promise(() => {}));
+      },
+    }));
+    vi.doMock("@upstash/redis", () => ({ Redis: class {} }));
+    process.env.UPSTASH_REDIS_REST_URL = "https://example.upstash.io";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "token";
+    vi.resetModules();
+
+    const mod = await import("@/lib/ratelimit");
+    const r = await mod.checkRateLimit("203.0.113.5");
+    expect(r.success).toBe(true);
+  }, 10_000);
 });
