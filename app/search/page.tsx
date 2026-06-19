@@ -16,7 +16,24 @@ export const metadata: Metadata = {
 };
 
 async function Results({ query }: { query: SearchQuery }) {
-  const { offers, source } = await searchWithChain(query);
+  let offers: Awaited<ReturnType<typeof searchWithChain>>["offers"] = [];
+  let source = "none";
+  try {
+    ({ offers, source } = await searchWithChain(query));
+  } catch (err) {
+    // A DB outage/timeout shouldn't hang or crash the page — show a clear,
+    // retryable message instead.
+    console.error("[search] results failed:", err);
+    return (
+      <div className="rounded-xl border bg-card p-8 text-center">
+        <p className="font-semibold">Search is temporarily unavailable.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          We couldn&apos;t reach the flight database. Please try again in a
+          moment.
+        </p>
+      </div>
+    );
+  }
 
   if (offers.length === 0) {
     return (

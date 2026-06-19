@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import prisma from "@/lib/db";
 import type { FlightOffer, FlightProvider, SearchQuery } from "@/lib/types";
+import { withTimeout, DB_TIMEOUT_MS } from "@/lib/with-timeout";
 import { mock } from "./mock";
 import { amadeus } from "./amadeus";
 import { duffel } from "./duffel";
@@ -72,7 +73,16 @@ async function writeCache(key: string, offers: FlightOffer[]): Promise<void> {
  * If FLIGHT_PROVIDER is set to a single non-default provider, that provider is
  * used directly (still cached) instead of the chain.
  */
-export async function searchWithChain(q: SearchQuery): Promise<{
+export function searchWithChain(q: SearchQuery): Promise<{
+  offers: FlightOffer[];
+  source: string;
+}> {
+  // Race the whole DB-backed chain against a timeout so an unreachable
+  // database rejects quickly instead of hanging the request.
+  return withTimeout(runSearchChain(q), DB_TIMEOUT_MS, "flight search");
+}
+
+async function runSearchChain(q: SearchQuery): Promise<{
   offers: FlightOffer[];
   source: string;
 }> {

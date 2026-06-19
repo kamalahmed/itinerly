@@ -1,5 +1,6 @@
 import prisma from "@/lib/db";
 import type { Airport, Airline } from "@/lib/types";
+import { withTimeout, DB_TIMEOUT_MS } from "@/lib/with-timeout";
 
 // Process-level caches — airport/airline reference data is effectively static.
 let airportCache: Map<string, Airport> | null = null;
@@ -7,7 +8,11 @@ let airlineCache: Map<string, Airline> | null = null;
 
 async function loadAirports(): Promise<Map<string, Airport>> {
   if (airportCache) return airportCache;
-  const rows = await prisma.airport.findMany({ include: { country: true } });
+  const rows = await withTimeout(
+    prisma.airport.findMany({ include: { country: true } }),
+    DB_TIMEOUT_MS,
+    "load airports"
+  );
   const map = new Map<string, Airport>();
   for (const r of rows) {
     map.set(r.iata, {
@@ -25,7 +30,11 @@ async function loadAirports(): Promise<Map<string, Airport>> {
 
 async function loadAirlines(): Promise<Map<string, Airline>> {
   if (airlineCache) return airlineCache;
-  const rows = await prisma.airline.findMany();
+  const rows = await withTimeout(
+    prisma.airline.findMany(),
+    DB_TIMEOUT_MS,
+    "load airlines"
+  );
   const map = new Map<string, Airline>();
   for (const r of rows) {
     map.set(r.iata, {
