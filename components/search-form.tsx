@@ -68,11 +68,21 @@ export function SearchForm({
     initial?.destination
   );
   const [departDate, setDepartDate] = React.useState<Date | undefined>(
-    toDate(initial?.departDate) ?? addDays(new Date(), 14)
+    toDate(initial?.departDate)
   );
   const [returnDate, setReturnDate] = React.useState<Date | undefined>(
     toDate(initial?.returnDate)
   );
+
+  // Default the departure date to ~2 weeks out — but only on the client, after
+  // mount. Computing it during render would use the server's UTC clock, which
+  // lands on a different calendar day than the visitor's local timezone and
+  // breaks hydration (React errors #418/#423/#425).
+  React.useEffect(() => {
+    if (!initial?.departDate) {
+      setDepartDate((d) => d ?? addDays(new Date(), 14));
+    }
+  }, [initial?.departDate]);
   const [cabin, setCabin] = React.useState<Cabin>(initial?.cabin ?? "economy");
   const [adults, setAdults] = React.useState(initial?.adults ?? 1);
   const [children, setChildren] = React.useState(initial?.children ?? 0);
