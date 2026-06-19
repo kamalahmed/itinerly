@@ -9,7 +9,12 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Runtime connection — use the POOLED endpoint in production (Neon's
+  // `-pooler` host) so serverless functions don't exhaust connections.
+  url       = env("DATABASE_URL")
+  // Migrations / introspection — must use the DIRECT (non-pooled) endpoint,
+  // since `prisma migrate` can't run over PgBouncer's transaction pooler.
+  directUrl = env("DIRECT_URL")
 }
 
 model Country {
