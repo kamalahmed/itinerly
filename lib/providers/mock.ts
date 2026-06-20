@@ -1,6 +1,7 @@
 import prisma from "@/lib/db";
 import { getAirport, getAirline } from "@/lib/airports";
 import { computeLocalTimes, localIsoAt } from "@/lib/normalize";
+import { connectingOffers } from "@/lib/connections";
 import type {
   FlightOffer,
   FlightProvider,
@@ -132,13 +133,18 @@ export const mock: FlightProvider = {
   name: "mock",
 
   async searchOffers(q: SearchQuery): Promise<FlightOffer[]> {
-    const outboundRoutes = (await prisma.seededRoute.findMany({
-      where: { originIata: q.origin, destinationIata: q.destination },
-    })) as SeededRouteRow[];
+    const [outboundRows, connecting] = await Promise.all([
+      prisma.seededRoute.findMany({
+        where: { originIata: q.origin, destinationIata: q.destination },
+      }),
+      // Real two-leg connecting itineraries for long-haul routes with no nonstop.
+      connectingOffers(q),
+    ]);
+    const outboundRoutes = outboundRows as SeededRouteRow[];
 
-    if (outboundRoutes.length === 0) return [];
+    if (outboundRoutes.length === 0 && connecting.length === 0) return [];
 
-    const offers: FlightOffer[] = [];
+    const offers: FlightOffer[] = [...connecting];
 
     if (q.tripType === "round_trip" && q.returnDate) {
       // The seed table is outbound-only; the return leg is synthesized by

@@ -9,7 +9,7 @@ import {
 } from "@react-pdf/renderer";
 import bwipjs from "bwip-js/node";
 import type { FlightOffer, FlightSegment, PassengerDetails } from "@/lib/types";
-import { formatDuration, timeOf } from "@/lib/normalize";
+import { formatDuration, timeOf, minutesBetween } from "@/lib/normalize";
 import { formatUSD, formatBDT, usdToBdt } from "@/lib/currency";
 
 /** Document heading — a clean, professional travel-itinerary title. */
@@ -55,7 +55,11 @@ export interface ItineraryModel {
     nationality: string;
     passport: string;
   }[];
-  legs: { label: string; segments: ItinerarySegmentView[] }[];
+  legs: {
+    label: string;
+    segments: ItinerarySegmentView[];
+    layovers: string[]; // layovers[i] sits between segments[i] and segments[i+1]
+  }[];
   fare: { base: string; taxes: string; total: string; totalBdt: string };
   footerNote: string;
 }
@@ -103,20 +107,30 @@ function toSegmentView(s: FlightSegment): ItinerarySegmentView {
   };
 }
 
+function legView(label: string, segments: FlightSegment[]) {
+  const layovers: string[] = [];
+  for (let i = 0; i < segments.length - 1; i++) {
+    const mins = minutesBetween(
+      segments[i].arrivalLocal,
+      segments[i + 1].departureLocal
+    );
+    const at = segments[i].destination;
+    layovers.push(
+      `Connection in ${at.city} (${at.iata}) · ${formatDuration(mins)} layover`
+    );
+  }
+  return { label, segments: segments.map(toSegmentView), layovers };
+}
+
 export function buildItineraryModel(
   offer: FlightOffer,
   passengers: PassengerDetails[],
   pnr: string,
   issuedAt: string
 ): ItineraryModel {
-  const legs = [
-    { label: "Outbound", segments: offer.outboundSegments.map(toSegmentView) },
-  ];
+  const legs = [legView("Outbound", offer.outboundSegments)];
   if (offer.returnSegments?.length) {
-    legs.push({
-      label: "Return",
-      segments: offer.returnSegments.map(toSegmentView),
-    });
+    legs.push(legView("Return", offer.returnSegments));
   }
   return {
     brand: "itinerly",
@@ -206,6 +220,18 @@ const styles = StyleSheet.create({
 
   // Segment card
   legLabel: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: MUTED, letterSpacing: 1, marginTop: 10, marginBottom: 5 },
+  layover: {
+    fontSize: 7.5,
+    color: MUTED,
+    backgroundColor: PANEL,
+    borderWidth: 1,
+    borderColor: LINE,
+    borderRadius: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginBottom: 8,
+    textAlign: "center",
+  },
   card: { borderWidth: 1, borderColor: LINE, borderRadius: 6, padding: 12, marginBottom: 8 },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   endCol: { width: "27%" },
@@ -359,7 +385,12 @@ function TicketDocument({
             <View key={li}>
               <Text style={styles.legLabel}>{leg.label.toUpperCase()}</Text>
               {leg.segments.map((s, si) => (
-                <SegmentCard s={s} key={si} />
+                <View key={si}>
+                  <SegmentCard s={s} />
+                  {leg.layovers[si] ? (
+                    <Text style={styles.layover}>{leg.layovers[si]}</Text>
+                  ) : null}
+                </View>
               ))}
             </View>
           ))}

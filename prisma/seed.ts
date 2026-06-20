@@ -180,35 +180,12 @@ const DAC_DESTS: DestSpec[] = [
   { iata: "NRT", durationMin: 390, basePriceUSD: 560, carriers: ["BG"] },
   { iata: "KIX", durationMin: 380, basePriceUSD: 540, carriers: ["BG"] },
   { iata: "TPE", durationMin: 290, basePriceUSD: 400, carriers: ["BG", "CX"] },
-  // Europe (BG nonstop + Gulf/Turkish carriers offered as one-stop "direct" mock entries)
-  { iata: "LHR", durationMin: 660, basePriceUSD: 620, carriers: ["BG", "EK", "QR", "TK"] },
-  { iata: "LGW", durationMin: 665, basePriceUSD: 600, carriers: ["BG", "EK"] },
-  { iata: "MAN", durationMin: 670, basePriceUSD: 610, carriers: ["BG", "EK", "QR"] },
-  { iata: "CDG", durationMin: 615, basePriceUSD: 640, carriers: ["EK", "QR", "TK", "BG"] },
-  { iata: "FRA", durationMin: 600, basePriceUSD: 650, carriers: ["EK", "QR", "TK"] },
-  { iata: "AMS", durationMin: 610, basePriceUSD: 645, carriers: ["EK", "QR", "TK"] },
-  { iata: "IST", durationMin: 540, basePriceUSD: 480, carriers: ["TK", "BG"] },
-  { iata: "FCO", durationMin: 570, basePriceUSD: 620, carriers: ["QR", "TK", "EK"] },
-  { iata: "MXP", durationMin: 575, basePriceUSD: 615, carriers: ["QR", "EK", "TK"] },
-  { iata: "MAD", durationMin: 620, basePriceUSD: 660, carriers: ["QR", "TK", "EK"] },
-  { iata: "BCN", durationMin: 615, basePriceUSD: 655, carriers: ["QR", "TK", "EK"] },
-  { iata: "ZRH", durationMin: 580, basePriceUSD: 660, carriers: ["EK", "QR", "TK"] },
-  { iata: "ARN", durationMin: 600, basePriceUSD: 640, carriers: ["TK", "QR"] },
-  // North America (Gulf/Turkish carriers as long "direct" mock entries)
-  { iata: "JFK", durationMin: 960, basePriceUSD: 980, carriers: ["QR", "EK", "TK"] },
-  { iata: "EWR", durationMin: 965, basePriceUSD: 970, carriers: ["QR", "EK"] },
-  { iata: "IAD", durationMin: 945, basePriceUSD: 960, carriers: ["QR", "EK", "TK"] },
-  { iata: "ORD", durationMin: 990, basePriceUSD: 1010, carriers: ["QR", "EK", "TK"] },
-  { iata: "LAX", durationMin: 1020, basePriceUSD: 1080, carriers: ["QR", "EK"] },
-  { iata: "YYZ", durationMin: 900, basePriceUSD: 940, carriers: ["EK", "QR", "TK"] },
-  { iata: "YVR", durationMin: 960, basePriceUSD: 1000, carriers: ["EK", "QR"] },
-  // Oceania
-  { iata: "SYD", durationMin: 600, basePriceUSD: 720, carriers: ["SQ", "MH", "TG"] },
-  { iata: "MEL", durationMin: 610, basePriceUSD: 715, carriers: ["SQ", "MH"] },
-  // Africa
-  { iata: "CAI", durationMin: 540, basePriceUSD: 560, carriers: ["SV", "QR"] },
-  { iata: "NBO", durationMin: 480, basePriceUSD: 600, carriers: ["QR", "EK"] },
-  { iata: "JNB", durationMin: 660, basePriceUSD: 780, carriers: ["QR", "EK"] },
+  // Long-haul: only genuine DAC NONSTOPS are seeded as direct routes. Every
+  // other long-haul (Europe / North America via EK, QR, TK, EY) is a real
+  // two-leg connection via the carrier's hub — see lib/connections.ts.
+  { iata: "LHR", durationMin: 680, basePriceUSD: 620, carriers: ["BG"] }, // BG 301 nonstop
+  { iata: "FCO", durationMin: 600, basePriceUSD: 620, carriers: ["BG"] }, // BG 355 nonstop
+  { iata: "IST", durationMin: 535, basePriceUSD: 480, carriers: ["TK"] }, // TK 713 nonstop
 ];
 
 // Secondary BD airports — realistic Middle East routes only.
@@ -335,6 +312,10 @@ const REAL_FLIGHTS: RealFlight[] = [
   { route: "DAC-KUL", carrier: "BS", flightNumber: "BS 315", depart: "08:25", arrive: "13:52", aircraft: "Boeing 737-800" },
   { route: "DAC-SIN", carrier: "BG", flightNumber: "BG 584", depart: "08:25", arrive: "14:40", aircraft: "Boeing 787-8" },
   { route: "DAC-SIN", carrier: "SQ", flightNumber: "SQ 447", depart: "23:55", arrive: "05:24", aircraft: "Boeing 787-10" },
+  // Long-haul NONSTOPS (the only carriers that fly these without a stop).
+  { route: "DAC-LHR", carrier: "BG", flightNumber: "BG 301", depart: "10:45", arrive: "17:05", aircraft: "Boeing 787-8" },
+  { route: "DAC-FCO", carrier: "BG", flightNumber: "BG 355", depart: "11:30", arrive: "17:30", aircraft: "Boeing 787-8" },
+  { route: "DAC-IST", carrier: "TK", flightNumber: "TK 713", depart: "06:50", arrive: "12:45", aircraft: "Airbus A330-300" },
 ];
 
 const TZ_BY_IATA = new Map(AIRPORTS.map((a) => [a.iata, a.timeZone]));
