@@ -9,6 +9,8 @@ import { getAirport, getAirline } from "@/lib/airports";
 import { resolveSchedule } from "@/lib/schedule";
 import { localIsoAt } from "@/lib/normalize";
 import type {
+  Airline,
+  Airport,
   Cabin,
   FlightOffer,
   FlightSegment,
@@ -63,10 +65,104 @@ function paxUnits(q: SearchQuery): number {
   return q.adults + q.children + q.infants * 0.1;
 }
 
-/** Build a 2-segment connecting offer for a one-way DAC departure on `departDate`. */
+function fmtMin(min: number): string {
+  const m = ((min % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(
+    m % 60
+  ).padStart(2, "0")}`;
+}
+
+/** "EK 201" → "EK 202" (return legs get a +1 number, like the direct round-trip). */
+function bumpNumber(flightNumber: string): string {
+  const m = flightNumber.match(/^([A-Z0-9]{2})\s*(\d+)$/);
+  if (!m) return flightNumber;
+  return `${m[1]} ${Number(m[2]) + 1}`;
+}
+
+interface LegInput {
+  flightNumber: string;
+  from: Airport;
+  to: Airport;
+  aircraft: string;
+  depart?: string; // real legs: explicit local clock at `from`
+  arrive?: string | null; // real legs: local clock at `to`
+  layoverAfterPrev?: number; // synthesized legs: minutes after previous arrival
+  nominalBlock?: number; // used to derive arrival when `arrive` is null
+}
+
+/** Assemble ordered legs into dated segments, threading multi-day arrivals and
+ *  layovers through timezones. Returns the segments and the total hub layover. */
+function buildSegments(
+  carrier: Airline,
+  legs: LegInput[],
+  startDate: string,
+  cabin: Cabin
+): { segments: FlightSegment[]; layover: number } {
+  const segments: FlightSegment[] = [];
+  let layoverTotal = 0;
+  let prevArrMin: number | null = null;
+  let prevArrDate = startDate;
+
+  legs.forEach((leg, i) => {
+    let depClock: string;
+    let depDate: string;
+    if (i === 0) {
+      depClock = leg.depart!;
+      depDate = startDate;
+    } else if (leg.depart) {
+      // Real onward leg: layover is the gap to its scheduled departure.
+      depClock = leg.depart;
+      let lay = toMin(leg.depart) - prevArrMin!;
+      depDate = prevArrDate;
+      if (lay < 0) {
+        lay += 1440;
+        depDate = addDays(prevArrDate, 1);
+      }
+      layoverTotal += lay;
+    } else {
+      // Synthesized onward leg: depart = previous arrival + a chosen layover.
+      const lay = leg.layoverAfterPrev!;
+      layoverTotal += lay;
+      let depMin = prevArrMin! + lay;
+      depDate = prevArrDate;
+      if (depMin >= 1440) {
+        depMin -= 1440;
+        depDate = addDays(prevArrDate, 1);
+      }
+      depClock = fmtMin(depMin);
+    }
+
+    const sched = resolveSchedule(
+      depClock,
+      leg.arrive ?? null,
+      leg.from.timeZone,
+      leg.to.timeZone,
+      leg.nominalBlock ?? 0,
+      leg.arrive ? 9999 : 0
+    );
+    const arrDate = addDays(depDate, sched.arrivalDayOffset);
+
+    segments.push({
+      carrier,
+      flightNumber: leg.flightNumber,
+      origin: leg.from,
+      destination: leg.to,
+      departureLocal: localIsoAt(depDate, depClock),
+      arrivalLocal: localIsoAt(arrDate, sched.arrivalTimeLocal),
+      durationMinutes: sched.durationMinutes,
+      aircraft: leg.aircraft,
+      cabin,
+      baggage: CABIN_BAGGAGE[cabin],
+    });
+    prevArrMin = toMin(sched.arrivalTimeLocal);
+    prevArrDate = arrDate;
+  });
+
+  return { segments, layover: layoverTotal };
+}
+
 async function buildConnectingOffer(
   c: ConnectingItinerary,
-  departDate: string,
   q: SearchQuery
 ): Promise<FlightOffer | null> {
   const [carrier, origin, hub, dest] = await Promise.all([
@@ -77,67 +173,44 @@ async function buildConnectingOffer(
   ]);
   if (!carrier || !origin || !hub || !dest) return null;
 
-  // Leg 1: DAC → hub. Trust the researched times (tolerance is wide for
-  // curated connections) and resolve a tz-correct arrival + day offset.
-  const s1 = resolveSchedule(
-    c.leg1.depart,
-    c.leg1.arrive,
-    origin.timeZone,
-    hub.timeZone,
-    0,
-    9999
+  // Outbound: the two real legs DAC → hub → destination.
+  const out = buildSegments(
+    carrier,
+    [
+      { flightNumber: c.leg1.flightNumber, from: origin, to: hub, aircraft: c.leg1.aircraft, depart: c.leg1.depart, arrive: c.leg1.arrive },
+      { flightNumber: c.leg2.flightNumber, from: hub, to: dest, aircraft: c.leg2.aircraft, depart: c.leg2.depart, arrive: c.leg2.arrive },
+    ],
+    q.departDate,
+    q.cabin
   );
-  const leg1ArrDate = addDays(departDate, s1.arrivalDayOffset);
+  const block1 = out.segments[0].durationMinutes; // DAC ↔ hub
+  const block2 = out.segments[1].durationMinutes; // hub ↔ dest
 
-  // Hub layover: leg 2's departure vs leg 1's arrival (both hub-local). A
-  // negative gap means leg 2 leaves the next day.
-  let layover = toMin(c.leg2.depart) - toMin(s1.arrivalTimeLocal);
-  let leg2DepDate = leg1ArrDate;
-  if (layover < 0) {
-    layover += 1440;
-    leg2DepDate = addDays(leg1ArrDate, 1);
+  let returnSegments: FlightSegment[] | undefined;
+  let returnDuration = 0;
+  if (q.tripType === "round_trip" && q.returnDate) {
+    // Mirror the outbound with a plausible synthesized return (dest → hub →
+    // DAC), the same convention the direct round-trip uses: reversed legs,
+    // +1 flight numbers, a deterministic departure slot and ~2.5h layover.
+    const retDepSlot = fmtMin(toMin(c.leg2.arrive ?? c.leg1.depart) + 120);
+    const ret = buildSegments(
+      carrier,
+      [
+        { flightNumber: bumpNumber(c.leg2.flightNumber), from: dest, to: hub, aircraft: c.leg2.aircraft, depart: retDepSlot, arrive: null, nominalBlock: block2 },
+        { flightNumber: bumpNumber(c.leg1.flightNumber), from: hub, to: origin, aircraft: c.leg1.aircraft, layoverAfterPrev: 150, arrive: null, nominalBlock: block1 },
+      ],
+      q.returnDate,
+      q.cabin
+    );
+    returnSegments = ret.segments;
+    returnDuration =
+      ret.segments[0].durationMinutes + ret.layover + ret.segments[1].durationMinutes;
   }
 
-  // Leg 2: hub → destination.
-  const s2 = resolveSchedule(
-    c.leg2.depart,
-    c.leg2.arrive,
-    hub.timeZone,
-    dest.timeZone,
-    0,
-    9999
-  );
-  const leg2ArrDate = addDays(leg2DepDate, s2.arrivalDayOffset);
-
-  const seg1: FlightSegment = {
-    carrier,
-    flightNumber: c.leg1.flightNumber,
-    origin,
-    destination: hub,
-    departureLocal: localIsoAt(departDate, c.leg1.depart),
-    arrivalLocal: localIsoAt(leg1ArrDate, s1.arrivalTimeLocal),
-    durationMinutes: s1.durationMinutes,
-    aircraft: c.leg1.aircraft,
-    cabin: q.cabin,
-    baggage: CABIN_BAGGAGE[q.cabin],
-  };
-  const seg2: FlightSegment = {
-    carrier,
-    flightNumber: c.leg2.flightNumber,
-    origin: hub,
-    destination: dest,
-    departureLocal: localIsoAt(leg2DepDate, c.leg2.depart),
-    arrivalLocal: localIsoAt(leg2ArrDate, s2.arrivalTimeLocal),
-    durationMinutes: s2.durationMinutes,
-    aircraft: c.leg2.aircraft,
-    cabin: q.cabin,
-    baggage: CABIN_BAGGAGE[q.cabin],
-  };
-
-  const totalDurationMinutes = s1.durationMinutes + layover + s2.durationMinutes;
-
+  const totalOut = block1 + out.layover + block2;
   const mult = CABIN_MULTIPLIER[q.cabin];
-  const total = Math.round(c.basePriceUSD * mult * paxUnits(q));
+  const legs = returnSegments ? 1.9 : 1; // round trip ≈ 1.9× one-way
+  const total = Math.round(c.basePriceUSD * mult * legs * paxUnits(q));
   const base = Math.round(total * 0.8);
 
   return {
@@ -146,20 +219,19 @@ async function buildConnectingOffer(
     totalPriceUSD: total,
     baseFareUSD: base,
     taxesUSD: total - base,
-    totalDurationMinutes,
+    totalDurationMinutes: totalOut + returnDuration,
     stops: 1,
-    outboundSegments: [seg1, seg2],
+    outboundSegments: out.segments,
+    returnSegments,
     refundable: false,
   };
 }
 
-/** Connecting offers for a one-way DAC→destination search (empty otherwise). */
+/** Connecting offers for a DAC→destination search (one-way or round-trip). */
 export async function connectingOffers(q: SearchQuery): Promise<FlightOffer[]> {
-  if (q.origin !== "DAC" || q.tripType === "round_trip") return [];
+  if (q.origin !== "DAC") return [];
   const matches = REAL_CONNECTIONS.filter((c) => c.dest === q.destination);
-  const built = await Promise.all(
-    matches.map((c) => buildConnectingOffer(c, q.departDate, q))
-  );
+  const built = await Promise.all(matches.map((c) => buildConnectingOffer(c, q)));
   return built.filter((o): o is FlightOffer => o !== null);
 }
 

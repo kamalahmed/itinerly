@@ -46,10 +46,29 @@ describe("connectingOffers", () => {
     expect(s2.arrivalLocal.slice(0, 10)).toBe("2026-08-16");
   });
 
-  it("returns nothing for round-trip (connections are one-way for now)", async () => {
+  it("builds a round-trip connection with a synthesized return leg", async () => {
     const offers = await connectingOffers(
-      makeQuery({ destination: "LHR", tripType: "round_trip", returnDate: "2026-08-29" })
+      makeQuery({
+        destination: "JFK",
+        departDate: "2026-08-15",
+        tripType: "round_trip",
+        returnDate: "2026-08-29",
+      })
     );
-    expect(offers).toEqual([]);
+    const ek = offers.find((o) => o.outboundSegments[0].carrier.iata === "EK");
+    expect(ek).toBeDefined();
+    // Outbound: DAC → DXB → JFK.
+    expect(ek!.outboundSegments).toHaveLength(2);
+    expect(ek!.outboundSegments[1].destination.iata).toBe("JFK");
+    // Return: JFK → DXB → DAC, on the return date.
+    expect(ek!.returnSegments).toHaveLength(2);
+    expect(ek!.returnSegments![0].origin.iata).toBe("JFK");
+    expect(ek!.returnSegments![1].destination.iata).toBe("DAC");
+    expect(ek!.returnSegments![0].departureLocal.slice(0, 10)).toBe("2026-08-29");
+    // Round trip costs more than the equivalent one-way.
+    const ow = (
+      await connectingOffers(makeQuery({ destination: "JFK", departDate: "2026-08-15" }))
+    ).find((o) => o.outboundSegments[0].carrier.iata === "EK");
+    expect(ek!.totalPriceUSD).toBeGreaterThan(ow!.totalPriceUSD);
   });
 });
