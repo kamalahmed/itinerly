@@ -52,6 +52,10 @@ model SeededRoute {
   airlineIata        String
   flightNumber       String
   departureTimeLocal String // "08:10"
+  // Real arrival clock time + day offset for curated real flights. Null for
+  // synthetic rows, which derive arrival from departure + durationMinutes.
+  arrivalTimeLocal   String?
+  arrivalDayOffset   Int     @default(0)
   durationMinutes    Int
   aircraft           String?
   basePriceUSD       Float

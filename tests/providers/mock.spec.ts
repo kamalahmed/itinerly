@@ -45,6 +45,31 @@ describe("mock provider — one-way", () => {
   });
 });
 
+describe("mock provider — real curated flights", () => {
+  it("returns real flight numbers for a covered route (DAC→DXB)", async () => {
+    const offers = await mock.searchOffers(makeQuery());
+    const numbers = offers.map((o) => o.outboundSegments[0].flightNumber);
+    expect(numbers).toContain("FZ 502"); // real flydubai DAC-DXB
+    expect(numbers).toContain("EK 587"); // real Emirates DAC-DXB
+  });
+
+  it("renders an overnight arrival on the next calendar day", async () => {
+    const offers = await mock.searchOffers(
+      makeQuery({ departDate: "2026-08-15" })
+    );
+    const bg = offers.find(
+      (o) => o.outboundSegments[0].flightNumber === "BG 347"
+    );
+    expect(bg).toBeDefined();
+    const seg = bg!.outboundSegments[0];
+    expect(seg.departureLocal.slice(0, 10)).toBe("2026-08-15");
+    expect(seg.departureLocal.slice(11, 16)).toBe("20:40");
+    // BG 347 departs 20:40 and lands 00:30 the next day.
+    expect(seg.arrivalLocal.slice(0, 10)).toBe("2026-08-16");
+    expect(seg.arrivalLocal.slice(11, 16)).toBe("00:30");
+  });
+});
+
 describe("mock provider — pricing", () => {
   it("prices business class above economy", async () => {
     const econ = await mock.searchOffers(makeQuery({ cabin: "economy" }));

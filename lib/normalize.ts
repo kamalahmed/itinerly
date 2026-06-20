@@ -21,6 +21,17 @@ export function computeLocalTimes(
   return { departureLocal, arrivalLocal, dayOffset };
 }
 
+/** Build a local ISO timestamp from a date, "HH:MM" and a day offset. */
+export function localIsoAt(
+  date: string,
+  time: string,
+  dayOffset = 0
+): string {
+  const [h, m] = time.split(":").map(Number);
+  const d = dayOffset === 0 ? date : addDays(date, dayOffset);
+  return `${d}T${pad(h)}:${pad(m)}:00`;
+}
+
 export function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;

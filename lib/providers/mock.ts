@@ -1,6 +1,6 @@
 import prisma from "@/lib/db";
 import { getAirport, getAirline } from "@/lib/airports";
-import { computeLocalTimes } from "@/lib/normalize";
+import { computeLocalTimes, localIsoAt } from "@/lib/normalize";
 import type {
   FlightOffer,
   FlightProvider,
@@ -30,6 +30,8 @@ type SeededRouteRow = {
   airlineIata: string;
   flightNumber: string;
   departureTimeLocal: string;
+  arrivalTimeLocal: string | null;
+  arrivalDayOffset: number;
   durationMinutes: number;
   aircraft: string | null;
   basePriceUSD: number;
@@ -66,11 +68,25 @@ async function buildSegment(
     ? shiftSlot(route.departureTimeLocal, route.id)
     : route.departureTimeLocal;
 
-  const { departureLocal, arrivalLocal } = computeLocalTimes(
-    departDate,
-    depTime,
-    route.durationMinutes
-  );
+  // Curated real flights carry a real arrival clock time + day offset; use them
+  // directly so the displayed arrival is the airline's actual local time. The
+  // synthetic rows (and synthesized reverse legs) derive arrival from duration.
+  let departureLocal: string;
+  let arrivalLocal: string;
+  if (!reverse && route.arrivalTimeLocal) {
+    departureLocal = localIsoAt(departDate, depTime);
+    arrivalLocal = localIsoAt(
+      departDate,
+      route.arrivalTimeLocal,
+      route.arrivalDayOffset
+    );
+  } else {
+    ({ departureLocal, arrivalLocal } = computeLocalTimes(
+      departDate,
+      depTime,
+      route.durationMinutes
+    ));
+  }
 
   const baseNumber = route.flightNumber.replace(route.airlineIata, "").trim();
   const flightNumber = reverse
