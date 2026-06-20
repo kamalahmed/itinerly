@@ -30,19 +30,41 @@ const CABIN_BAGGAGE: Record<Cabin, string> = {
 };
 
 // Global connecting hubs and the carrier that plausibly operates them.
+// Global connecting hubs by region with the carrier that operates each. The
+// long-haul builder picks whichever genuinely sits "on the way" (smallest
+// detour) so a connection routes through a plausible hub, not a random one.
 const HUBS: { iata: string; carrier: string }[] = [
+  // Middle East
   { iata: "DXB", carrier: "EK" },
   { iata: "DOH", carrier: "QR" },
   { iata: "AUH", carrier: "EY" },
   { iata: "IST", carrier: "TK" },
+  { iata: "JED", carrier: "SV" },
+  // South / Southeast Asia
+  { iata: "DEL", carrier: "AI" },
   { iata: "SIN", carrier: "SQ" },
   { iata: "BKK", carrier: "TG" },
   { iata: "KUL", carrier: "MH" },
+  // East Asia
   { iata: "HKG", carrier: "CX" },
+  { iata: "ICN", carrier: "KE" },
+  { iata: "NRT", carrier: "NH" },
+  { iata: "PVG", carrier: "MU" },
+  // Europe
   { iata: "FRA", carrier: "LH" },
   { iata: "LHR", carrier: "BA" },
   { iata: "CDG", carrier: "AF" },
   { iata: "AMS", carrier: "KL" },
+  // Americas
+  { iata: "JFK", carrier: "AA" },
+  { iata: "ORD", carrier: "UA" },
+  { iata: "ATL", carrier: "DL" },
+  { iata: "YYZ", carrier: "AC" },
+  { iata: "GRU", carrier: "LA" },
+  // Africa / Oceania
+  { iata: "ADD", carrier: "ET" },
+  { iata: "JNB", carrier: "SA" },
+  { iata: "SYD", carrier: "QF" },
 ];
 
 const DEPARTURE_SLOTS = [
@@ -207,17 +229,23 @@ function buildOneWayOffers(
       });
     });
   } else {
-    // Long-haul: connect via the hub that adds the least detour.
+    // Long-haul: connect via a hub that genuinely sits on the way. Rank by the
+    // path distance origin→hub→dest and keep only hubs whose detour is modest
+    // (≤ 1.45× the direct distance); fall back to the single best if none pass.
     const byIata = new Map(airports.map((a) => [a.iata, a]));
-    const hubs = HUBS.map((h) => ({ ...h, airport: byIata.get(h.iata) }))
-      .filter((h) => h.airport && h.iata !== origin.iata && h.iata !== dest.iata)
-      .map((h) => ({
-        ...h,
-        detour:
-          haversineKm(origin, h.airport!) + haversineKm(h.airport!, dest),
-      }))
-      .sort((a, b) => a.detour - b.detour)
-      .slice(0, 2); // two best hub options
+    const ranked = HUBS.map((h) => ({ ...h, airport: byIata.get(h.iata) }))
+      .filter(
+        (h): h is typeof h & { airport: Airport } =>
+          !!h.airport && h.iata !== origin.iata && h.iata !== dest.iata
+      )
+      .map((h) => {
+        const detour =
+          haversineKm(origin, h.airport) + haversineKm(h.airport, dest);
+        return { ...h, detour, ratio: km ? detour / km : 1 };
+      })
+      .sort((a, b) => a.detour - b.detour);
+    const sensible = ranked.filter((h) => h.ratio <= 1.45);
+    const hubs = (sensible.length ? sensible : ranked).slice(0, 2);
 
     for (const h of hubs) {
       const carrier = airlines.find((a) => a.iata === h.carrier);
@@ -229,8 +257,8 @@ function buildOneWayOffers(
       const dep = DEPARTURE_SLOTS[salt % DEPARTURE_SLOTS.length];
 
       const leg1 = makeSegment(carrier, origin, hub, q.departDate, dep, km1, q.cabin, salt);
-      // Onward leg departs ~2.5h after arrival at the hub.
-      const layover = 150;
+      // Realistic hub connection: 90–210 min, deterministic per route+hub.
+      const layover = 90 + (salt % 121);
       let dep2Min = toMinutes(leg1.arrTime) + layover;
       let leg2Date = leg1.arrDate;
       if (dep2Min >= 1440) {
