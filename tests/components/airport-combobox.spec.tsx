@@ -27,7 +27,7 @@ describe("AirportCombobox", () => {
 
     await user.click(screen.getByRole("combobox"));
     await user.type(
-      screen.getByPlaceholderText("City or airport code…"),
+      screen.getByPlaceholderText("Country, city or airport code…"),
       "dub"
     );
 
@@ -48,7 +48,7 @@ describe("AirportCombobox", () => {
 
     await user.click(screen.getByRole("combobox"));
     await user.type(
-      screen.getByPlaceholderText("City or airport code…"),
+      screen.getByPlaceholderText("Country, city or airport code…"),
       "dub"
     );
 

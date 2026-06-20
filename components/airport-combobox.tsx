@@ -36,6 +36,26 @@ export function AirportCombobox({
   const [query, setQuery] = React.useState("");
   const [results, setResults] = React.useState<Airport[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const [nearby, setNearby] = React.useState<Airport[]>([]);
+
+  // Default origins from the visitor's location, fetched once when the FROM
+  // field is first opened with an empty query.
+  React.useEffect(() => {
+    if (!open || icon !== "origin" || nearby.length > 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/airports?nearby=1");
+        const data = await res.json();
+        if (!cancelled) setNearby(data.airports ?? []);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, icon, nearby.length]);
 
   React.useEffect(() => {
     const q = query.trim();
@@ -87,7 +107,7 @@ export function AirportCombobox({
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="City or airport code…"
+            placeholder="Country, city or airport code…"
             value={query}
             onValueChange={setQuery}
           />
@@ -100,13 +120,19 @@ export function AirportCombobox({
             {!loading && query.length > 0 && results.length === 0 && (
               <CommandEmpty>No airports found.</CommandEmpty>
             )}
-            {!loading && query.length === 0 && (
+            {!loading && query.length === 0 && nearby.length === 0 && (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                Type a city or airport code
+                Type a city, airport code, or country
               </div>
             )}
-            <CommandGroup>
-              {results.map((a) => (
+            <CommandGroup
+              heading={
+                query.length === 0 && nearby.length > 0
+                  ? "Airports near you"
+                  : undefined
+              }
+            >
+              {(query.trim().length > 0 ? results : nearby).map((a) => (
                 <CommandItem
                   key={a.iata}
                   value={a.iata}

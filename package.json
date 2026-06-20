@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "seed": "tsx prisma/seed.ts",
+    "enrich": "tsx prisma/enrich.ts",
     "db:reset": "prisma migrate reset --force && prisma db seed",
     "postinstall": "prisma generate"
   },

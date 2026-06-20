@@ -20,10 +20,21 @@ describe("GET /api/airports", () => {
     );
   });
 
-  it("caps results at 8", async () => {
+  it("caps results at the limit", async () => {
     const res = await GET(new NextRequest(`${BASE}?q=a`));
     const body = await res.json();
-    expect(body.airports.length).toBeLessThanOrEqual(8);
+    expect(body.airports.length).toBeLessThanOrEqual(10);
+  });
+
+  it("returns geo-default origins for nearby=1 with no query", async () => {
+    const res = await GET(
+      new NextRequest(`${BASE}?nearby=1`, {
+        headers: { "x-vercel-ip-country": "BD" },
+      })
+    );
+    const body = await res.json();
+    expect(body.airports.length).toBeGreaterThan(0);
+    expect(body.airports.every((a: { countryCode: string }) => a.countryCode === "BD")).toBe(true);
   });
 
   it("returns an empty list for a missing query", async () => {

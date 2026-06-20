@@ -84,6 +84,47 @@ async function fetchRoute(origin: string, dest: string): Promise<RawFlight[]> {
   return json.data ?? [];
 }
 
+/** Operating (non-codeshare), deduped real flights on a route — one parsed
+ *  record per flight. A fresh API call; used by the offline enrichment script. */
+export interface RealFlightRecord {
+  flightNumber: string; // "EK 587"
+  carrierIata: string;
+  carrierName: string;
+  depart: string; // "HH:MM" local at origin
+  arrive: string; // "HH:MM" local at destination
+  originTerminal?: string;
+  destinationTerminal?: string;
+}
+
+export async function fetchRouteFlights(
+  origin: string,
+  dest: string
+): Promise<RealFlightRecord[]> {
+  const raw = await fetchRoute(origin, dest);
+  const seen = new Set<string>();
+  const out: RealFlightRecord[] = [];
+  for (const f of raw) {
+    const num = f.flight?.iata;
+    const dep = clockOf(f.departure?.scheduled);
+    const arr = clockOf(f.arrival?.scheduled);
+    const carrierIata = f.airline?.iata?.toUpperCase();
+    const number = f.flight?.number;
+    if (!num || f.flight?.codeshared || seen.has(num)) continue;
+    if (!dep || !arr || !carrierIata || !number) continue;
+    seen.add(num);
+    out.push({
+      flightNumber: `${carrierIata} ${number}`,
+      carrierIata,
+      carrierName: titleCase(f.airline?.name ?? carrierIata),
+      depart: dep,
+      arrive: arr,
+      originTerminal: f.departure?.terminal || undefined,
+      destinationTerminal: f.arrival?.terminal || undefined,
+    });
+  }
+  return out;
+}
+
 /** Unique flights on a route, cached 12h (one API call per route / 12h). */
 async function cachedRoute(origin: string, dest: string): Promise<RawFlight[]> {
   const cacheKey = createHash("sha256")

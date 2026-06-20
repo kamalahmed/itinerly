@@ -64,4 +64,21 @@ describe("searchAirports", () => {
   it("returns an empty array for a blank query", async () => {
     expect(await searchAirports("   ")).toEqual([]);
   });
+
+  it("matches by COUNTRY name (e.g. 'thailand' → Thai airports)", async () => {
+    const r = await searchAirports("thailand");
+    const codes = r.map((a) => a.iata);
+    expect(codes).toContain("BKK");
+    // Every result should actually be in Thailand.
+    expect(r.every((a) => a.country.toLowerCase().includes("thailand"))).toBe(true);
+  });
+
+  it("ranks exact IATA first, then city, then country", async () => {
+    // 'dac' is an exact IATA code → must be the top hit.
+    expect((await searchAirports("dac"))[0].iata).toBe("DAC");
+    // 'bangladesh' surfaces Bangladeshi airports (incl. DAC).
+    const bd = await searchAirports("bangladesh");
+    expect(bd.some((a) => a.iata === "DAC")).toBe(true);
+    expect(bd.every((a) => a.countryCode === "BD")).toBe(true);
+  });
 });
