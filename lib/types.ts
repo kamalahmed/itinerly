@@ -36,7 +36,7 @@ export interface FlightSegment {
 
 export interface FlightOffer {
   id: string; // opaque provider key
-  provider: "duffel" | "amadeus" | "travelpayouts" | "mock";
+  provider: "duffel" | "amadeus" | "travelpayouts" | "aviationstack" | "mock";
   totalPriceUSD: number;
   baseFareUSD: number;
   taxesUSD: number;

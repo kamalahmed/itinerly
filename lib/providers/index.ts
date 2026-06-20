@@ -5,6 +5,7 @@ import { withTimeout, DB_TIMEOUT_MS } from "@/lib/with-timeout";
 import { mock } from "./mock";
 import { amadeus } from "./amadeus";
 import { duffel } from "./duffel";
+import { aviationstack, isAviationstackEnabled } from "./aviationstack";
 
 export type { FlightProvider } from "@/lib/types";
 
@@ -12,6 +13,7 @@ const PROVIDERS: Record<string, FlightProvider> = {
   mock,
   amadeus,
   duffel,
+  aviationstack,
 };
 
 /** Single provider selected by FLIGHT_PROVIDER (defaults to mock). */
@@ -98,7 +100,22 @@ async function runSearchChain(q: SearchQuery): Promise<{
     return { offers, source: explicit };
   }
 
-  // Chain: mock first.
+  // Chain: real AviationStack schedules first (when a key is configured), so
+  // routes it covers show real flight numbers/times; fall back to mock for
+  // everything else. Any error (quota, network) degrades to mock.
+  if (isAviationstackEnabled()) {
+    try {
+      const avOffers = await aviationstack.searchOffers(q);
+      if (avOffers.length > 0) {
+        await writeCache(key, avOffers);
+        return { offers: avOffers, source: "aviationstack" };
+      }
+    } catch (err) {
+      console.error("[searchWithChain] aviationstack failed:", err);
+    }
+  }
+
+  // Curated real routes + connections + worldwide synthetic coverage.
   const mockOffers = await mock.searchOffers(q);
   if (mockOffers.length > 0) {
     await writeCache(key, mockOffers);

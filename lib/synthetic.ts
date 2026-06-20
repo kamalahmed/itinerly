@@ -94,7 +94,7 @@ function aircraftForDistance(km: number, salt: number): string {
   return ["Boeing 787-9", "Airbus A350-900", "Boeing 777-300ER"][salt % 3];
 }
 
-function priceForKm(km: number, carrier: string): number {
+export function priceForKm(km: number, carrier: string): number {
   const base = 60 + km * 0.052; // rough economy fare curve
   const premium = ["EK", "QR", "SQ", "CX", "QF", "NH", "JL"].includes(carrier)
     ? 1.12
