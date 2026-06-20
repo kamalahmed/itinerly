@@ -7,33 +7,25 @@
  * for a visa itinerary) — see DECISIONS.md.
  */
 import { PrismaClient } from "@prisma/client";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { resolveSchedule } from "../lib/schedule";
 
 const prisma = new PrismaClient();
+const DATA = join(process.cwd(), "prisma", "data");
 
-// --- Airlines (exactly the carriers requested) -----------------------------
-const AIRLINES: { iata: string; name: string; aircraft: string[] }[] = [
-  { iata: "BG", name: "Biman Bangladesh Airlines", aircraft: ["Boeing 787-9", "Boeing 737-800", "Boeing 777-300ER"] },
-  { iata: "BS", name: "US-Bangla Airlines", aircraft: ["Boeing 737-800", "Airbus A330-300", "ATR 72-600"] },
-  { iata: "2A", name: "Air Astra", aircraft: ["ATR 72-600"] },
-  { iata: "EK", name: "Emirates", aircraft: ["Boeing 777-300ER", "Airbus A380-800"] },
-  { iata: "QR", name: "Qatar Airways", aircraft: ["Boeing 787-8", "Airbus A350-900"] },
-  { iata: "FZ", name: "flydubai", aircraft: ["Boeing 737 MAX 8", "Boeing 737-800"] },
-  { iata: "GF", name: "Gulf Air", aircraft: ["Airbus A320neo", "Airbus A321neo"] },
-  { iata: "EY", name: "Etihad Airways", aircraft: ["Boeing 787-9", "Airbus A321neo"] },
-  { iata: "SV", name: "Saudia", aircraft: ["Airbus A330-300", "Boeing 787-9"] },
-  { iata: "TK", name: "Turkish Airlines", aircraft: ["Airbus A330-300", "Boeing 777-300ER"] },
-  { iata: "SQ", name: "Singapore Airlines", aircraft: ["Boeing 787-10", "Airbus A350-900"] },
-  { iata: "MH", name: "Malaysia Airlines", aircraft: ["Boeing 737-800", "Airbus A330-300"] },
-  { iata: "TG", name: "Thai Airways", aircraft: ["Boeing 787-8", "Airbus A350-900"] },
-  { iata: "OD", name: "Batik Air Malaysia", aircraft: ["Boeing 737-800", "Airbus A320"] },
-  { iata: "AI", name: "Air India", aircraft: ["Airbus A320neo", "Boeing 787-8"] },
-  { iata: "UL", name: "SriLankan Airlines", aircraft: ["Airbus A320neo", "Airbus A330-300"] },
-  { iata: "CX", name: "Cathay Pacific", aircraft: ["Airbus A330-300", "Airbus A350-900"] },
-  { iata: "6E", name: "IndiGo", aircraft: ["Airbus A320neo", "Airbus A321neo"] },
-];
+// --- Airlines (flag carriers + major global carriers, from JSON) -----------
+type AirlineRow = {
+  iata: string;
+  name: string;
+  countryCode: string;
+  aircraft: string[];
+};
+const AIRLINES: AirlineRow[] = JSON.parse(
+  readFileSync(join(DATA, "airlines.json"), "utf8")
+);
 
-// --- Countries + Airports --------------------------------------------------
+// --- Countries + Airports (153 international airports, ~100 countries) ------
 type AirportRow = {
   iata: string;
   name: string;
@@ -41,89 +33,12 @@ type AirportRow = {
   country: string;
   countryCode: string;
   timeZone: string;
+  lat: number;
+  lon: number;
 };
-
-const AIRPORTS: AirportRow[] = [
-  // Bangladesh origins
-  { iata: "DAC", name: "Hazrat Shahjalal International Airport", city: "Dhaka", country: "Bangladesh", countryCode: "BD", timeZone: "Asia/Dhaka" },
-  { iata: "CGP", name: "Shah Amanat International Airport", city: "Chittagong", country: "Bangladesh", countryCode: "BD", timeZone: "Asia/Dhaka" },
-  { iata: "ZYL", name: "Osmani International Airport", city: "Sylhet", country: "Bangladesh", countryCode: "BD", timeZone: "Asia/Dhaka" },
-  { iata: "BZL", name: "Barishal Airport", city: "Barishal", country: "Bangladesh", countryCode: "BD", timeZone: "Asia/Dhaka" },
-  // Middle East
-  { iata: "DXB", name: "Dubai International Airport", city: "Dubai", country: "United Arab Emirates", countryCode: "AE", timeZone: "Asia/Dubai" },
-  { iata: "AUH", name: "Zayed International Airport", city: "Abu Dhabi", country: "United Arab Emirates", countryCode: "AE", timeZone: "Asia/Dubai" },
-  { iata: "SHJ", name: "Sharjah International Airport", city: "Sharjah", country: "United Arab Emirates", countryCode: "AE", timeZone: "Asia/Dubai" },
-  { iata: "DOH", name: "Hamad International Airport", city: "Doha", country: "Qatar", countryCode: "QA", timeZone: "Asia/Qatar" },
-  { iata: "MCT", name: "Muscat International Airport", city: "Muscat", country: "Oman", countryCode: "OM", timeZone: "Asia/Muscat" },
-  { iata: "BAH", name: "Bahrain International Airport", city: "Manama", country: "Bahrain", countryCode: "BH", timeZone: "Asia/Bahrain" },
-  { iata: "KWI", name: "Kuwait International Airport", city: "Kuwait City", country: "Kuwait", countryCode: "KW", timeZone: "Asia/Kuwait" },
-  { iata: "RUH", name: "King Khalid International Airport", city: "Riyadh", country: "Saudi Arabia", countryCode: "SA", timeZone: "Asia/Riyadh" },
-  { iata: "JED", name: "King Abdulaziz International Airport", city: "Jeddah", country: "Saudi Arabia", countryCode: "SA", timeZone: "Asia/Riyadh" },
-  { iata: "DMM", name: "King Fahd International Airport", city: "Dammam", country: "Saudi Arabia", countryCode: "SA", timeZone: "Asia/Riyadh" },
-  { iata: "MED", name: "Prince Mohammad bin Abdulaziz Airport", city: "Medina", country: "Saudi Arabia", countryCode: "SA", timeZone: "Asia/Riyadh" },
-  // South Asia
-  { iata: "CCU", name: "Netaji Subhas Chandra Bose Airport", city: "Kolkata", country: "India", countryCode: "IN", timeZone: "Asia/Kolkata" },
-  { iata: "DEL", name: "Indira Gandhi International Airport", city: "New Delhi", country: "India", countryCode: "IN", timeZone: "Asia/Kolkata" },
-  { iata: "BOM", name: "Chhatrapati Shivaji Maharaj Airport", city: "Mumbai", country: "India", countryCode: "IN", timeZone: "Asia/Kolkata" },
-  { iata: "MAA", name: "Chennai International Airport", city: "Chennai", country: "India", countryCode: "IN", timeZone: "Asia/Kolkata" },
-  { iata: "BLR", name: "Kempegowda International Airport", city: "Bengaluru", country: "India", countryCode: "IN", timeZone: "Asia/Kolkata" },
-  { iata: "KTM", name: "Tribhuvan International Airport", city: "Kathmandu", country: "Nepal", countryCode: "NP", timeZone: "Asia/Kathmandu" },
-  { iata: "CMB", name: "Bandaranaike International Airport", city: "Colombo", country: "Sri Lanka", countryCode: "LK", timeZone: "Asia/Colombo" },
-  { iata: "MLE", name: "Velana International Airport", city: "Malé", country: "Maldives", countryCode: "MV", timeZone: "Indian/Maldives" },
-  { iata: "KHI", name: "Jinnah International Airport", city: "Karachi", country: "Pakistan", countryCode: "PK", timeZone: "Asia/Karachi" },
-  // Southeast Asia
-  { iata: "BKK", name: "Suvarnabhumi Airport", city: "Bangkok", country: "Thailand", countryCode: "TH", timeZone: "Asia/Bangkok" },
-  { iata: "DMK", name: "Don Mueang International Airport", city: "Bangkok", country: "Thailand", countryCode: "TH", timeZone: "Asia/Bangkok" },
-  { iata: "HKT", name: "Phuket International Airport", city: "Phuket", country: "Thailand", countryCode: "TH", timeZone: "Asia/Bangkok" },
-  { iata: "KUL", name: "Kuala Lumpur International Airport", city: "Kuala Lumpur", country: "Malaysia", countryCode: "MY", timeZone: "Asia/Kuala_Lumpur" },
-  { iata: "PEN", name: "Penang International Airport", city: "Penang", country: "Malaysia", countryCode: "MY", timeZone: "Asia/Kuala_Lumpur" },
-  { iata: "SIN", name: "Singapore Changi Airport", city: "Singapore", country: "Singapore", countryCode: "SG", timeZone: "Asia/Singapore" },
-  { iata: "CGK", name: "Soekarno-Hatta International Airport", city: "Jakarta", country: "Indonesia", countryCode: "ID", timeZone: "Asia/Jakarta" },
-  { iata: "DPS", name: "Ngurah Rai International Airport", city: "Denpasar", country: "Indonesia", countryCode: "ID", timeZone: "Asia/Makassar" },
-  { iata: "RGN", name: "Yangon International Airport", city: "Yangon", country: "Myanmar", countryCode: "MM", timeZone: "Asia/Yangon" },
-  { iata: "SGN", name: "Tan Son Nhat International Airport", city: "Ho Chi Minh City", country: "Vietnam", countryCode: "VN", timeZone: "Asia/Ho_Chi_Minh" },
-  { iata: "HAN", name: "Noi Bai International Airport", city: "Hanoi", country: "Vietnam", countryCode: "VN", timeZone: "Asia/Ho_Chi_Minh" },
-  { iata: "MNL", name: "Ninoy Aquino International Airport", city: "Manila", country: "Philippines", countryCode: "PH", timeZone: "Asia/Manila" },
-  // East Asia
-  { iata: "HKG", name: "Hong Kong International Airport", city: "Hong Kong", country: "Hong Kong", countryCode: "HK", timeZone: "Asia/Hong_Kong" },
-  { iata: "CAN", name: "Guangzhou Baiyun International Airport", city: "Guangzhou", country: "China", countryCode: "CN", timeZone: "Asia/Shanghai" },
-  { iata: "PVG", name: "Shanghai Pudong International Airport", city: "Shanghai", country: "China", countryCode: "CN", timeZone: "Asia/Shanghai" },
-  { iata: "PEK", name: "Beijing Capital International Airport", city: "Beijing", country: "China", countryCode: "CN", timeZone: "Asia/Shanghai" },
-  { iata: "KMG", name: "Kunming Changshui International Airport", city: "Kunming", country: "China", countryCode: "CN", timeZone: "Asia/Shanghai" },
-  { iata: "ICN", name: "Incheon International Airport", city: "Seoul", country: "South Korea", countryCode: "KR", timeZone: "Asia/Seoul" },
-  { iata: "NRT", name: "Narita International Airport", city: "Tokyo", country: "Japan", countryCode: "JP", timeZone: "Asia/Tokyo" },
-  { iata: "KIX", name: "Kansai International Airport", city: "Osaka", country: "Japan", countryCode: "JP", timeZone: "Asia/Tokyo" },
-  { iata: "TPE", name: "Taoyuan International Airport", city: "Taipei", country: "Taiwan", countryCode: "TW", timeZone: "Asia/Taipei" },
-  // Europe
-  { iata: "LHR", name: "London Heathrow Airport", city: "London", country: "United Kingdom", countryCode: "GB", timeZone: "Europe/London" },
-  { iata: "LGW", name: "London Gatwick Airport", city: "London", country: "United Kingdom", countryCode: "GB", timeZone: "Europe/London" },
-  { iata: "MAN", name: "Manchester Airport", city: "Manchester", country: "United Kingdom", countryCode: "GB", timeZone: "Europe/London" },
-  { iata: "CDG", name: "Paris Charles de Gaulle Airport", city: "Paris", country: "France", countryCode: "FR", timeZone: "Europe/Paris" },
-  { iata: "FRA", name: "Frankfurt Airport", city: "Frankfurt", country: "Germany", countryCode: "DE", timeZone: "Europe/Berlin" },
-  { iata: "AMS", name: "Amsterdam Airport Schiphol", city: "Amsterdam", country: "Netherlands", countryCode: "NL", timeZone: "Europe/Amsterdam" },
-  { iata: "IST", name: "Istanbul Airport", city: "Istanbul", country: "Türkiye", countryCode: "TR", timeZone: "Europe/Istanbul" },
-  { iata: "FCO", name: "Rome Fiumicino Airport", city: "Rome", country: "Italy", countryCode: "IT", timeZone: "Europe/Rome" },
-  { iata: "MXP", name: "Milan Malpensa Airport", city: "Milan", country: "Italy", countryCode: "IT", timeZone: "Europe/Rome" },
-  { iata: "MAD", name: "Adolfo Suárez Madrid–Barajas Airport", city: "Madrid", country: "Spain", countryCode: "ES", timeZone: "Europe/Madrid" },
-  { iata: "BCN", name: "Barcelona–El Prat Airport", city: "Barcelona", country: "Spain", countryCode: "ES", timeZone: "Europe/Madrid" },
-  { iata: "ZRH", name: "Zurich Airport", city: "Zurich", country: "Switzerland", countryCode: "CH", timeZone: "Europe/Zurich" },
-  { iata: "ARN", name: "Stockholm Arlanda Airport", city: "Stockholm", country: "Sweden", countryCode: "SE", timeZone: "Europe/Stockholm" },
-  // North America
-  { iata: "JFK", name: "John F. Kennedy International Airport", city: "New York", country: "United States", countryCode: "US", timeZone: "America/New_York" },
-  { iata: "EWR", name: "Newark Liberty International Airport", city: "Newark", country: "United States", countryCode: "US", timeZone: "America/New_York" },
-  { iata: "IAD", name: "Washington Dulles International Airport", city: "Washington", country: "United States", countryCode: "US", timeZone: "America/New_York" },
-  { iata: "ORD", name: "O'Hare International Airport", city: "Chicago", country: "United States", countryCode: "US", timeZone: "America/Chicago" },
-  { iata: "LAX", name: "Los Angeles International Airport", city: "Los Angeles", country: "United States", countryCode: "US", timeZone: "America/Los_Angeles" },
-  { iata: "YYZ", name: "Toronto Pearson International Airport", city: "Toronto", country: "Canada", countryCode: "CA", timeZone: "America/Toronto" },
-  { iata: "YVR", name: "Vancouver International Airport", city: "Vancouver", country: "Canada", countryCode: "CA", timeZone: "America/Vancouver" },
-  // Oceania
-  { iata: "SYD", name: "Sydney Kingsford Smith Airport", city: "Sydney", country: "Australia", countryCode: "AU", timeZone: "Australia/Sydney" },
-  { iata: "MEL", name: "Melbourne Airport", city: "Melbourne", country: "Australia", countryCode: "AU", timeZone: "Australia/Melbourne" },
-  // Africa
-  { iata: "CAI", name: "Cairo International Airport", city: "Cairo", country: "Egypt", countryCode: "EG", timeZone: "Africa/Cairo" },
-  { iata: "NBO", name: "Jomo Kenyatta International Airport", city: "Nairobi", country: "Kenya", countryCode: "KE", timeZone: "Africa/Nairobi" },
-  { iata: "JNB", name: "O.R. Tambo International Airport", city: "Johannesburg", country: "South Africa", countryCode: "ZA", timeZone: "Africa/Johannesburg" },
-];
+const AIRPORTS: AirportRow[] = JSON.parse(
+  readFileSync(join(DATA, "airports.json"), "utf8")
+);
 
 // --- Route definitions -----------------------------------------------------
 // durationMin = nonstop block time from DAC; carriers = airlines serving it.
@@ -423,6 +338,8 @@ async function main() {
         name: a.name,
         city: a.city,
         timeZone: a.timeZone,
+        lat: a.lat,
+        lon: a.lon,
         countryId: countryMap.get(a.countryCode)!,
       },
     });
@@ -431,7 +348,7 @@ async function main() {
   // Airlines
   for (const a of AIRLINES) {
     await prisma.airline.create({
-      data: { iata: a.iata, name: a.name, logo: `/airlines/${a.iata}.svg` },
+      data: { iata: a.iata, name: a.name, countryCode: a.countryCode, logo: `/airlines/${a.iata}.svg` },
     });
   }
 

@@ -8,12 +8,15 @@ export interface Airport {
   country: string; // "Bangladesh"
   countryCode: string; // "BD"
   timeZone: string; // "Asia/Dhaka"
+  lat?: number;
+  lon?: number;
 }
 
 export interface Airline {
   iata: string; // "FZ"
   name: string; // "flydubai"
   logo: string; // "/airlines/FZ.svg"
+  countryCode?: string; // "AE"
 }
 
 export interface FlightSegment {

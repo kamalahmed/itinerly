@@ -22,6 +22,8 @@ async function loadAirports(): Promise<Map<string, Airport>> {
       country: r.country.name,
       countryCode: r.country.iata2,
       timeZone: r.timeZone,
+      lat: r.lat ?? undefined,
+      lon: r.lon ?? undefined,
     });
   }
   airportCache = map;
@@ -41,6 +43,7 @@ async function loadAirlines(): Promise<Map<string, Airline>> {
       iata: r.iata,
       name: r.name,
       logo: r.logo ?? `/airlines/${r.iata}.svg`,
+      countryCode: r.countryCode ?? undefined,
     });
   }
   airlineCache = map;
@@ -57,6 +60,10 @@ export async function getAirline(iata: string): Promise<Airline | null> {
 
 export async function getAllAirports(): Promise<Airport[]> {
   return [...(await loadAirports()).values()];
+}
+
+export async function getAllAirlines(): Promise<Airline[]> {
+  return [...(await loadAirlines()).values()];
 }
 
 /** Up to `limit` airports whose IATA, city, or name matches the query. */

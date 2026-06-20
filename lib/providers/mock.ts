@@ -1,7 +1,13 @@
 import prisma from "@/lib/db";
-import { getAirport, getAirline } from "@/lib/airports";
+import {
+  getAirport,
+  getAirline,
+  getAllAirports,
+  getAllAirlines,
+} from "@/lib/airports";
 import { computeLocalTimes, localIsoAt } from "@/lib/normalize";
 import { connectingOffers } from "@/lib/connections";
+import { synthesizeOffers } from "@/lib/synthetic";
 import type {
   FlightOffer,
   FlightProvider,
@@ -142,8 +148,6 @@ export const mock: FlightProvider = {
     ]);
     const outboundRoutes = outboundRows as SeededRouteRow[];
 
-    if (outboundRoutes.length === 0 && connecting.length === 0) return [];
-
     const offers: FlightOffer[] = [...connecting];
 
     if (q.tripType === "round_trip" && q.returnDate) {
@@ -193,6 +197,24 @@ export const mock: FlightProvider = {
         });
       }
     }
+
+    // No curated direct route or connection covers this pair — synthesize
+    // plausible flights so any origin/destination returns results.
+    if (offers.length === 0) {
+      const [origin, destination, allAirports, allAirlines] = await Promise.all([
+        getAirport(q.origin),
+        getAirport(q.destination),
+        getAllAirports(),
+        getAllAirlines(),
+      ]);
+      if (origin && destination) {
+        offers.push(
+          ...synthesizeOffers(origin, destination, allAirports, allAirlines, q)
+        );
+      }
+    }
+
+    if (offers.length === 0) return [];
 
     // Sort by price, but float the preferred airline (if any) to the top.
     const pref = q.preferredAirline?.toUpperCase();

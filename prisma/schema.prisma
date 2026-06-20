@@ -33,15 +33,18 @@ model Airport {
   name      String
   city      String
   timeZone  String
+  lat       Float?
+  lon       Float?
   countryId Int
   country   Country @relation(fields: [countryId], references: [id])
 }
 
 model Airline {
-  id   Int     @id @default(autoincrement())
-  iata String  @unique
-  name String
-  logo String?
+  id          Int     @id @default(autoincrement())
+  iata        String  @unique
+  name        String
+  countryCode String?
+  logo        String?
 }
 
 // Used by the "mock" provider to mirror echoflights' seeded-DB approach.
